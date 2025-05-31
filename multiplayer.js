@@ -134,4 +134,3 @@ document.head.appendChild(style);
 document.addEventListener('DOMContentLoaded', () => {
     window.multiplayer = new MultiplayerManager();
 });
-

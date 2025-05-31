@@ -6,6 +6,7 @@ class MegaLuckCasino {
         this.subscription = null;
         this.ownedGloves = new Set();
         this.cancelAttempts = 0;
+        this.gameInitialized = false;
         
         this.gloves = [
             { id: 'basic', name: 'Basic Gloves', luck: 2, cost: 10, rarity: 'common' },
@@ -24,14 +25,51 @@ class MegaLuckCasino {
             "💎 Diamond luck! Fantastic!"
         ];
         
-        this.init();
+        // Don't call init directly, wait for disclaimer
+        this.showDisclaimer();
+    }
+
+    showDisclaimer() {
+        const disclaimerContainer = document.getElementById('disclaimer-popup-container');
+        disclaimerContainer.style.display = 'flex';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'disclaimer-overlay';
+
+        const popup = document.createElement('div');
+        popup.className = 'disclaimer-popup';
+        
+        popup.innerHTML = `
+            <h2>🚨 Important Disclaimer 🚨</h2>
+            <p>This game is a simulation for <strong>entertainment purposes only</strong>.</p>
+            <p>No real money or prizes are involved, and <strong>no real money can be won or lost</strong>.</p>
+            <p>All credits or coins used in this game are virtual and have <strong>no monetary value</strong>.</p>
+            <p>This game is <strong>not intended for real gambling</strong> and is designed solely for fun and practice.</p>
+            <p>By playing, you acknowledge that this is a game of chance with <strong>no real financial stakes</strong>.</p>
+            <p>Please play responsibly and ensure you meet your local age requirements for gambling-related content.</p>
+            <div class="popup-buttons">
+                <button class="popup-btn confirm" id="accept-disclaimer-btn">I Understand & Agree</button>
+            </div>
+        `;
+
+        disclaimerContainer.appendChild(overlay);
+        disclaimerContainer.appendChild(popup);
+
+        document.getElementById('accept-disclaimer-btn').addEventListener('click', () => {
+            disclaimerContainer.innerHTML = ''; // Clear the disclaimer
+            disclaimerContainer.style.display = 'none';
+            this.init(); // Proceed with game initialization
+        });
     }
     
     init() {
+        if (this.gameInitialized) return; // Prevent double initialization
         this.updateDisplay();
         this.generateGloves();
         this.bindEvents();
         this.startFakeWinners();
+        this.gameInitialized = true;
+        console.log("Game initialized after disclaimer.");
     }
     
     updateDisplay() {
@@ -48,6 +86,10 @@ class MegaLuckCasino {
     
     generateGloves() {
         const container = document.getElementById('gloves-grid');
+        if (!container) {
+            console.warn("Gloves container not found, skipping glove generation.");
+            return;
+        }
         container.innerHTML = '';
         
         this.gloves.forEach(glove => {
@@ -69,9 +111,18 @@ class MegaLuckCasino {
     }
     
     bindEvents() {
-        document.getElementById('spin-btn').addEventListener('click', () => this.spin(100, false));
-        document.getElementById('mega-spin-btn').addEventListener('click', () => this.spin(500, true));
-        document.getElementById('subscribe-btn').addEventListener('click', () => this.showSubscriptionPopup());
+        const spinBtn = document.getElementById('spin-btn');
+        const megaSpinBtn = document.getElementById('mega-spin-btn');
+        const subscribeBtn = document.getElementById('subscribe-btn');
+
+        if (spinBtn) spinBtn.addEventListener('click', () => this.spin(100, false));
+        else console.warn("Spin button not found.");
+
+        if (megaSpinBtn) megaSpinBtn.addEventListener('click', () => this.spin(500, true));
+        else console.warn("Mega spin button not found.");
+        
+        if (subscribeBtn) subscribeBtn.addEventListener('click', () => this.showSubscriptionPopup());
+        else console.warn("Subscribe button not found.");
         
         // Coin packages
         document.querySelectorAll('.package').forEach(pkg => {
@@ -85,6 +136,7 @@ class MegaLuckCasino {
     }
     
     spin(cost, isMega) {
+        if (!this.gameInitialized) return; // Don't allow actions before init
         if (this.realMoney < cost) {
             this.showPopup('💸 NOT ENOUGH MONEY! 💸', 'You need more money to spin! Buy coins to continue your winning streak!', [
                 { text: 'BUY COINS NOW!', action: () => this.highlightCoinShop() }
@@ -144,6 +196,8 @@ class MegaLuckCasino {
     }
     
     checkWin(results, isMega) {
+        if (!this.gameInitialized) return;
+
         if (results[0] === results[1] && results[1] === results[2]) {
             // Win!
             const multiplier = isMega ? 20 : 10;
@@ -183,6 +237,8 @@ class MegaLuckCasino {
     }
     
     buyGlove(glove) {
+        if (!this.gameInitialized) return;
+
         if (this.coins < glove.cost) {
             this.showPopup('💸 NOT ENOUGH COINS! 💸', `You need ${glove.cost} coins to buy ${glove.name}!\n\nBuy more coins to increase your luck!`, [
                 { text: 'BUY COINS!', action: () => this.highlightCoinShop() }
@@ -203,6 +259,8 @@ class MegaLuckCasino {
     }
     
     buyCoins(cost, coins) {
+        if (!this.gameInitialized) return;
+
         if (this.realMoney < cost) {
             this.showPopup('💸 INSUFFICIENT FUNDS! 💸', 'You don\'t have enough money! Your luck is about to change - don\'t give up now!', [
                 { text: 'I\'LL FIND A WAY!', action: () => {} }
@@ -221,6 +279,8 @@ class MegaLuckCasino {
     }
     
     showSubscriptionPopup() {
+        if (!this.gameInitialized) return;
+
         this.showPopup('🌟 PREMIUM MEMBERSHIP 🌟', 'Get 2x luck, exclusive gloves, and daily bonuses!\nOnly $50/month!', [
             { text: 'SUBSCRIBE NOW!', action: () => this.subscribe() },
             { text: 'Maybe Later', action: () => this.showUpsellPopup() }
@@ -228,6 +288,8 @@ class MegaLuckCasino {
     }
     
     showUpsellPopup() {
+        if (!this.gameInitialized) return;
+
         this.showPopup('⚠️ WAIT! ⚠️', 'Don\'t miss out! Premium members win 80% more often!\nFirst month only $25!', [
             { text: 'TAKE THE DEAL!', action: () => this.subscribe(25) },
             { text: 'No Thanks', action: () => this.showFinalUpsell() }
@@ -235,6 +297,8 @@ class MegaLuckCasino {
     }
     
     showFinalUpsell() {
+        if (!this.gameInitialized) return;
+
         this.showPopup('🚨 FINAL OFFER! 🚨', 'LAST CHANCE! One week FREE trial!\nCancel anytime!', [
             { text: 'FREE TRIAL!', action: () => this.subscribe(0, true) },
             { text: 'Close', action: () => {} }
@@ -242,6 +306,8 @@ class MegaLuckCasino {
     }
     
     subscribe(cost = 50, isTrial = false) {
+        if (!this.gameInitialized) return;
+
         if (this.realMoney < cost) {
             this.showPopup('💸 INSUFFICIENT FUNDS! 💸', 'You need more money to subscribe!', [
                 { text: 'OK', action: () => {} }
@@ -270,7 +336,7 @@ class MegaLuckCasino {
     }
     
     showUnsubscribeOffer() {
-        if (!this.subscription) return;
+        if (!this.gameInitialized || !this.subscription) return;
         
         this.showPopup('📊 SUBSCRIPTION MANAGER 📊', 'Manage your Premium subscription', [
             { text: 'Keep Premium', action: () => {} },
@@ -279,6 +345,7 @@ class MegaLuckCasino {
     }
     
     startCancellationProcess() {
+        if (!this.gameInitialized) return;
         this.cancelAttempts++;
         
         const cancellationMessages = [
@@ -333,8 +400,10 @@ class MegaLuckCasino {
     }
     
     cancelSubscription() {
+        if (!this.gameInitialized) return;
+
         this.subscription = null;
-        this.luck = Math.max(1, this.luck / 2);
+        this.luck = Math.max(1, this.luck / 2); // Ensure luck doesn't go below 1
         this.cancelAttempts = 0;
         
         document.getElementById('sub-status').textContent = '❌ NO PREMIUM';
@@ -350,7 +419,10 @@ class MegaLuckCasino {
     }
     
     highlightCoinShop() {
+        if (!this.gameInitialized) return;
+
         const coinShop = document.querySelector('.coin-shop');
+        if (!coinShop) return;
         coinShop.style.border = '5px solid #ff0000';
         coinShop.style.animation = 'pulse 1s infinite';
         
@@ -361,6 +433,19 @@ class MegaLuckCasino {
     }
     
     showPopup(title, message, buttons) {
+        // If game not initialized (disclaimer is active), queue popup or handle differently
+        if (!this.gameInitialized && title !== '🚨 Important Disclaimer 🚨') { // Prevent infinite loop if disclaimer itself calls showPopup
+            console.warn("Game not initialized, popup suppressed:", title);
+            return;
+        }
+
+        const popupContainer = document.getElementById('popup-container');
+        if (!popupContainer) {
+            console.error("Popup container not found!");
+            return;
+        }
+        popupContainer.innerHTML = ''; // Clear previous popups
+
         const popup = document.createElement('div');
         popup.className = 'popup';
         
@@ -386,15 +471,29 @@ class MegaLuckCasino {
             });
         });
         
-        const container = document.getElementById('popup-container');
-        container.appendChild(overlay);
-        container.appendChild(popup);
+        popupContainer.appendChild(overlay);
+        popupContainer.appendChild(popup);
     }
     
     startFakeWinners() {
+        if (!this.gameInitialized) {
+             // Wait for game initialization if called too early
+            const checkInit = setInterval(() => {
+                if (this.gameInitialized) {
+                    clearInterval(checkInit);
+                    this._startFakeWinnersLogic();
+                }
+            }, 100);
+            return;
+        }
+       this._startFakeWinnersLogic();
+    }
+
+    _startFakeWinnersLogic() {
         const fakeNames = ['LuckyMike', 'BigWinner99', 'CoinMaster', 'JackpotJill', 'GoldenGamer', 'SpinKing'];
         
         setInterval(() => {
+            if (!this.gameInitialized) return; // Double check
             const name = fakeNames[Math.floor(Math.random() * fakeNames.length)];
             const amount = Math.floor(Math.random() * 1000) + 100;
             const symbol = this.slots[Math.floor(Math.random() * this.slots.length)];
@@ -404,7 +503,13 @@ class MegaLuckCasino {
     }
     
     addToFeed(message) {
+        if (!this.gameInitialized) return;
+
         const feed = document.getElementById('results-feed');
+        if (!feed) {
+            console.warn("Results feed not found, skipping message:", message);
+            return;
+        }
         const timestamp = new Date().toLocaleTimeString();
         feed.innerHTML = `[${timestamp}] ${message}<br>` + feed.innerHTML;
         
@@ -420,4 +525,3 @@ class MegaLuckCasino {
 document.addEventListener('DOMContentLoaded', () => {
     window.game = new MegaLuckCasino();
 });
-
