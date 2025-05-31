@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEGA LUCK CASINO 🎰 - GET RICH QUICK!</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="popup-container"></div>
+    
+    <header class="top-bar">
+        <div class="money-display">
+            <span class="real-money">💵 Real Money: $<span id="real-money">10000</span></span>
+            <span class="coins">🪙 Lucky Coins: <span id="coins">0</span></span>
+        </div>
+        <div class="subscription-status">
+            <span id="sub-status" class="no-sub">❌ NO PREMIUM</span>
+            <button id="subscribe-btn" class="subscribe-btn">🌟 GET PREMIUM NOW! 🌟</button>
+        </div>
+    </header>
+
+    <div class="game-container">
+        <div class="left-panel">
+            <div class="slot-machine">
+                <h2>🎰 MEGA JACKPOT SLOTS 🎰</h2>
+                <div class="slot-display">
+                    <div class="slot" id="slot1">🍎</div>
+                    <div class="slot" id="slot2">🍊</div>
+                    <div class="slot" id="slot3">🍋</div>
+                </div>
+                <div class="spin-controls">
+                    <button id="spin-btn" class="spin-btn">🎲 SPIN ($100) 🎲</button>
+                    <button id="mega-spin-btn" class="mega-spin-btn">💎 MEGA SPIN ($500) 💎</button>
+                </div>
+                <div class="luck-display">
+                    🍀 Your Luck: <span id="luck-value">1</span>%
+                </div>
+            </div>
+
+            <div class="glove-shop">
+                <h3>🧤 LUCKY GLOVES SHOP 🧤</h3>
+                <div class="gloves-grid" id="gloves-grid">
+                    <!-- Gloves will be populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="player-list">
+                <h3>🏆 RECENT BIG WINNERS 🏆</h3>
+                <div id="players-container">
+                    <!-- Players will be populated by JS -->
+                </div>
+            </div>
+
+            <div class="coin-shop">
+                <h3>💰 BUY LUCKY COINS 💰</h3>
+                <div class="coin-packages">
+                    <div class="package" data-cost="100" data-coins="50">
+                        <div class="package-coins">50 Coins</div>
+                        <div class="package-cost">$100</div>
+                        <button class="buy-btn">BUY NOW!</button>
+                    </div>
+                    <div class="package popular" data-cost="500" data-coins="300">
+                        <div class="popular-badge">POPULAR!</div>
+                        <div class="package-coins">300 Coins</div>
+                        <div class="package-cost">$500</div>
+                        <div class="bonus">+50 BONUS!</div>
+                        <button class="buy-btn">BUY NOW!</button>
+                    </div>
+                    <div class="package best-value" data-cost="1000" data-coins="700">
+                        <div class="best-value-badge">BEST VALUE!</div>
+                        <div class="package-coins">700 Coins</div>
+                        <div class="package-cost">$1000</div>
+                        <div class="bonus">+200 BONUS!</div>
+                        <button class="buy-btn">BUY NOW!</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="results-feed">
+        <h4>🔥 LIVE RESULTS FEED 🔥</h4>
+        <div id="results-feed" class="feed-content">
+            <!-- Live results will appear here -->
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    <script src="multiplayer.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
