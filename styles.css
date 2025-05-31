@@ -505,6 +505,68 @@ body {
     border-radius: 50%;
 }
 
+.sell-coins-shop {
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 20px;
+    padding: 25px;
+    border: 3px solid #27ae60; 
+    box-shadow: 0 0 30px rgba(39, 174, 96, 0.3);
+    margin-top: 20px; 
+}
+
+.sell-coins-shop h3 {
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 22px;
+    color: #2ecc71; 
+}
+
+.sell-coins-shop p {
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+#exchange-rate-display, #sell-preview-amount, #rate-update-timer-display {
+    font-weight: bold;
+    color: #ffd700; 
+}
+
+.sell-controls {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+    align-items: center;
+    justify-content: center;
+}
+
+#sell-coins-amount {
+    padding: 10px;
+    border-radius: 10px;
+    border: 2px solid #27ae60;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 16px;
+    width: 150px; 
+    text-align: center;
+}
+
+#sell-coins-btn { 
+    background: linear-gradient(45deg, #2ecc71, #27ae60);
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+#sell-coins-btn:hover {
+    transform: scale(1.05);
+}
+
 .win-animation {
     animation: winFlash 2s ease-in-out;
 }

@@ -8,9 +8,10 @@ class MegaLuckCasino {
         this.cancelAttempts = 0;
         this.gameInitialized = false;
         
-        // Time related properties
         this.gameStartTime = null;
         this.currentInGameDay = 1;
+        this.currentInGameMonth = 1;
+        this.lastMonthProcessedForRate = 0;
         this.isNight = false;
         this.timeUpdateInterval = null;
 
@@ -31,7 +32,6 @@ class MegaLuckCasino {
             "💎 Diamond luck! Fantastic!"
         ];
         
-        // Don't call init directly, wait for disclaimer
         this.showDisclaimer();
     }
 
@@ -62,26 +62,92 @@ class MegaLuckCasino {
         disclaimerContainer.appendChild(popup);
 
         document.getElementById('accept-disclaimer-btn').addEventListener('click', () => {
-            disclaimerContainer.innerHTML = ''; // Clear the disclaimer
+            disclaimerContainer.innerHTML = ''; 
             disclaimerContainer.style.display = 'none';
-            this.init(); // Proceed with game initialization
+            this.init(); 
         });
     }
     
-    init() {
-        if (this.gameInitialized) return; // Prevent double initialization
+    async init() {
+        if (this.gameInitialized) return; 
+        
+        await new Promise(resolve => {
+            const interval = setInterval(() => {
+                if (window.room && window.room.clientId) {
+                    clearInterval(interval);
+                    resolve();
+                }
+            }, 100);
+        });
+
+        this.setRealMoney(this.realMoney, false); 
+        this.setCoins(this.coins, false);       
+
+        if (window.room) {
+            window.room.updatePresence({
+                realMoney: this.realMoney,
+                coins: this.coins,
+                luck: this.luck 
+            });
+
+            if (!window.room.roomState.gameSystemInitialized) {
+                const peersArray = Object.keys(window.room.peers).sort();
+                if (peersArray.length > 0 && window.room.clientId === peersArray[0]) {
+                    window.room.updateRoomState({
+                        gameSystemInitialized: true,
+                        currentExchangeRate: 0.01, 
+                        exchangeRateMeta: {
+                            lastMonthProcessed: 0,
+                            status: 'initial',
+                            timestamp: Date.now(),
+                            nextUpdateAttemptScheduled: false,
+                        }
+                    });
+                    this.addToFeed("🏦 Central Bank initialized. Exchange rate system online.");
+                }
+            }
+
+            window.room.subscribeRoomState(this.handleRoomStateUpdate.bind(this));
+            this.handleRoomStateUpdate(window.room.roomState); 
+        }
+
         this.updateDisplay();
         this.generateGloves();
         this.bindEvents();
         this.startFakeWinners();
         
-        // Initialize game time
         this.gameStartTime = Date.now();
-        this.updateGameTimeDisplay(); // Initial call to set display
-        this.timeUpdateInterval = setInterval(this.updateGameTimeDisplay.bind(this), 1000); // Update every second
+        this.updateGameTimeDisplay(); 
+        this.timeUpdateInterval = setInterval(this.updateGameTimeDisplay.bind(this), 1000); 
 
         this.gameInitialized = true;
         console.log("Game initialized after disclaimer.");
+    }
+
+    handleRoomStateUpdate(roomState) {
+        if (!roomState) return;
+        const exchangeRateDisplay = document.getElementById('exchange-rate-display');
+        if (exchangeRateDisplay) {
+            exchangeRateDisplay.textContent = roomState.currentExchangeRate ? roomState.currentExchangeRate.toFixed(4) : "N/A";
+        }
+        this.updateSellPreview(); 
+    }
+    
+    setRealMoney(amount, updatePresence = true) {
+        this.realMoney = Math.max(0, amount); 
+        if (updatePresence && window.room) {
+            window.room.updatePresence({ realMoney: this.realMoney });
+        }
+        document.getElementById('real-money').textContent = this.realMoney.toLocaleString();
+    }
+
+    setCoins(amount, updatePresence = true) {
+        this.coins = Math.max(0, amount); 
+        if (updatePresence && window.room) {
+            window.room.updatePresence({ coins: this.coins });
+        }
+        document.getElementById('coins').textContent = this.coins.toLocaleString();
+        this.updateSellPreview();
     }
     
     updateDisplay() {
@@ -98,25 +164,39 @@ class MegaLuckCasino {
             document.getElementById('sub-status').className = 'no-sub';
             document.getElementById('subscribe-btn').style.display = 'block';
         }
+        this.updateSellPreview();
     }
     
     updateGameTimeDisplay() {
         if (!this.gameStartTime || !this.gameInitialized) {
-            // Set default or ensure DOM elements exist before proceeding if needed
             const timeStatusIconEl = document.getElementById('time-status-icon');
             const timeTextEl = document.getElementById('time-text');
             if (timeStatusIconEl) timeStatusIconEl.textContent = '☀️';
             if (timeTextEl) timeTextEl.textContent = `Day 1`;
+            if (document.getElementById('rate-update-timer-display')) document.getElementById('rate-update-timer-display').textContent = `Calculating...`;
             return;
         }
 
         const elapsedRealTimeMilliseconds = Date.now() - this.gameStartTime;
         const elapsedRealTimeSeconds = elapsedRealTimeMilliseconds / 1000;
 
-        // 1 in-game day = 2 real-time seconds
         this.currentInGameDay = Math.floor(elapsedRealTimeSeconds / 2) + 1;
+        const newInGameMonth = Math.floor((this.currentInGameDay -1) / 30) + 1;
+
+        const secondsIntoCurrentMonth = (elapsedRealTimeSeconds % 60); 
+        const secondsToNextMonth = 60 - secondsIntoCurrentMonth;
         
-        // Day/Night cycle: 0-0.99s = day, 1-1.99s = night within each 2-second block
+        const rateUpdateTimerDisplay = document.getElementById('rate-update-timer-display');
+        if (rateUpdateTimerDisplay) {
+            rateUpdateTimerDisplay.textContent = `${Math.floor(secondsToNextMonth)}s`;
+        }
+
+        if (newInGameMonth > this.currentInGameMonth) {
+            this.currentInGameMonth = newInGameMonth;
+            this.addToFeed(`🗓️ A new month has begun! Month ${this.currentInGameMonth}.`);
+            this.attemptRateUpdateForNewMonth(this.currentInGameMonth);
+        }
+        
         const cyclePositionInSeconds = elapsedRealTimeSeconds % 2;
         this.isNight = cyclePositionInSeconds >= 1;
 
@@ -126,11 +206,123 @@ class MegaLuckCasino {
         if (timeStatusIconEl && timeTextEl) {
             if (this.isNight) {
                 timeStatusIconEl.textContent = '🌙';
-                timeTextEl.textContent = `Night ${this.currentInGameDay}`;
+                timeTextEl.textContent = `Night ${this.currentInGameDay} (M ${this.currentInGameMonth})`;
             } else {
                 timeStatusIconEl.textContent = '☀️';
-                timeTextEl.textContent = `Day ${this.currentInGameDay}`;
+                timeTextEl.textContent = `Day ${this.currentInGameDay} (M ${this.currentInGameMonth})`;
             }
+        }
+    }
+
+    async attemptRateUpdateForNewMonth(newMonth) {
+        if (!window.room || !window.room.peers || !window.room.clientId || !window.room.roomState.gameSystemInitialized) {
+            console.log("Rate update: Room or system not ready.");
+            return;
+        }
+
+        const exchangeRateMeta = window.room.roomState.exchangeRateMeta || { lastMonthProcessed: 0, status: 'initial' };
+
+        if (exchangeRateMeta.lastMonthProcessed >= newMonth && exchangeRateMeta.status === 'completed') {
+            return;
+        }
+        
+        if (exchangeRateMeta.processingMonth === newMonth && exchangeRateMeta.status === 'processing') {
+            return;
+        }
+
+        const connectedPeerIds = Object.keys(window.room.peers).sort();
+        if (connectedPeerIds.length === 0 || window.room.clientId !== connectedPeerIds[0]) {
+            return; 
+        }
+        
+        console.log(`This client (${window.room.clientId}) is leader for month ${newMonth} rate update.`);
+        this.addToFeed(`🏦 The Central Bank is convening to set new exchange rates for month ${newMonth}...`);
+
+        window.room.updateRoomState({
+            exchangeRateMeta: {
+                ...exchangeRateMeta,
+                processingMonth: newMonth,
+                status: 'processing',
+                leader: window.room.clientId,
+                timestamp: Date.now()
+            }
+        });
+
+        await this.calculateAndSetExchangeRate(newMonth, exchangeRateMeta.lastRateValue);
+    }
+
+    async calculateAndSetExchangeRate(month, previousRate) {
+        if (!window.room) return;
+
+        let totalRealMoney = 0;
+        let totalLuckyCoins = 0;
+
+        for (const playerId in window.room.presence) {
+            const playerData = window.room.presence[playerId];
+            totalRealMoney += (playerData.realMoney || 0);
+            totalLuckyCoins += (playerData.coins || 0);
+        }
+        
+        this.addToFeed(`Current Economy: ${totalRealMoney.toLocaleString()} Real Money, ${totalLuckyCoins.toLocaleString()} Lucky Coins.`);
+
+        try {
+            const systemPrompt = `You are an economic advisor for a virtual casino game. Players can earn 'Lucky Coins' through gameplay and can buy them with 'Real Money' (which is a finite resource they start with). Players now want to sell 'Lucky Coins' back for 'Real Money'.
+Your task is to determine an exchange rate: how much 'Real Money' 1 'Lucky Coin' is worth.
+'Real Money' supply is relatively fixed for players. 'Lucky Coins' are generated more frequently.
+The exchange rate should:
+1. Generally be unfavorable to the player (e.g., buying 1 Lucky Coin might cost more Real Money than selling 1 Lucky Coin yields).
+2. Help maintain 'Real Money' as a valuable and somewhat scarce resource.
+3. Not be extremely volatile but can adjust based on the total amounts in circulation.
+A higher ratio of TLC to TRM might suggest Lucky Coins are less valuable.
+The rate should be between 0.001 and 0.5.
+Respond ONLY with a JSON object matching this schema: {\"exchangeRate\": <number>}. The number should be a positive decimal. Do not include any other text or explanation.`;
+
+            const userPromptContent = `Current total Real Money (TRM) in circulation: ${totalRealMoney}. Current total Lucky Coins (TLC) in circulation: ${totalLuckyCoins}. Previous exchange rate (if available): ${previousRate || 'N/A'}. Determine the new exchange rate for 1 Lucky Coin to Real Money.`;
+            
+            const completion = await websim.chat.completions.create({
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPromptContent }
+                ],
+                json: true,
+            });
+
+            const result = JSON.parse(completion.content);
+            let exchangeRate = parseFloat(result.exchangeRate);
+
+            if (isNaN(exchangeRate) || exchangeRate <= 0) {
+                console.error("LLM returned invalid exchange rate, using fallback.", result);
+                exchangeRate = previousRate || 0.01; 
+                this.addToFeed(`⚠️ LLM provided an invalid rate. Using fallback rate: ${exchangeRate.toFixed(4)}.`);
+            } else {
+                exchangeRate = Math.max(0.0001, Math.min(0.5, exchangeRate));
+            }
+
+            window.room.updateRoomState({
+                currentExchangeRate: exchangeRate,
+                exchangeRateMeta: {
+                    lastMonthProcessed: month,
+                    status: 'completed',
+                    processingMonth: null,
+                    leader: null,
+                    lastRateValue: exchangeRate,
+                    timestamp: Date.now()
+                }
+            });
+            this.addToFeed(`🏦 Exchange Rate Update (Month ${month}): 1 Lucky Coin = ${exchangeRate.toFixed(4)} Real Money.`);
+
+        } catch (error) {
+            console.error('Error calculating exchange rate with LLM:', error);
+            this.addToFeed(`⚠️ Error updating exchange rate. Retaining previous rate if available.`);
+            window.room.updateRoomState({
+                exchangeRateMeta: {
+                    ...(window.room.roomState.exchangeRateMeta || {}),
+                    status: 'failed',
+                    processingMonth: null, 
+                    leader: null,
+                    timestamp: Date.now()
+                }
+            });
         }
     }
     
@@ -164,6 +356,9 @@ class MegaLuckCasino {
         const spinBtn = document.getElementById('spin-btn');
         const megaSpinBtn = document.getElementById('mega-spin-btn');
         const subscribeBtn = document.getElementById('subscribe-btn');
+        const sellCoinsBtn = document.getElementById('sell-coins-btn'); 
+        const sellCoinsAmountInput = document.getElementById('sell-coins-amount'); 
+
 
         if (spinBtn) spinBtn.addEventListener('click', () => this.spin(100, false));
         else console.warn("Spin button not found.");
@@ -174,7 +369,6 @@ class MegaLuckCasino {
         if (subscribeBtn) subscribeBtn.addEventListener('click', () => this.showSubscriptionPopup());
         else console.warn("Subscribe button not found.");
         
-        // Coin packages
         document.querySelectorAll('.package').forEach(pkg => {
             const buyBtn = pkg.querySelector('.buy-btn');
             buyBtn.addEventListener('click', () => {
@@ -183,21 +377,81 @@ class MegaLuckCasino {
                 this.buyCoins(cost, coins);
             });
         });
+
+        if (sellCoinsBtn) {
+            sellCoinsBtn.addEventListener('click', () => this.sellLuckyCoins());
+        } else {
+            console.warn("Sell coins button not found.");
+        }
+        if (sellCoinsAmountInput) {
+            sellCoinsAmountInput.addEventListener('input', () => this.updateSellPreview());
+        } else {
+            console.warn("Sell coins amount input not found.");
+        }
+    }
+
+    updateSellPreview() {
+        const sellAmountInput = document.getElementById('sell-coins-amount');
+        const previewAmountDisplay = document.getElementById('sell-preview-amount');
+        
+        if (!sellAmountInput || !previewAmountDisplay || !window.room || !window.room.roomState) return;
+
+        const coinsToSell = parseInt(sellAmountInput.value) || 0;
+        const rate = window.room.roomState.currentExchangeRate || 0;
+        
+        if (coinsToSell <= 0) {
+            previewAmountDisplay.textContent = "0.00";
+            return;
+        }
+        
+        const realMoneyGained = coinsToSell * rate;
+        previewAmountDisplay.textContent = realMoneyGained.toFixed(2);
+    }
+
+    sellLuckyCoins() {
+        if (!this.gameInitialized || !window.room || !window.room.roomState) return;
+
+        const sellAmountInput = document.getElementById('sell-coins-amount');
+        const coinsToSell = parseInt(sellAmountInput.value);
+
+        if (isNaN(coinsToSell) || coinsToSell <= 0) {
+            this.showPopup('⚠️ INVALID AMOUNT ⚠️', 'Please enter a valid amount of coins to sell.', [{ text: 'OK', action: () => {} }]);
+            return;
+        }
+
+        if (coinsToSell > this.coins) {
+            this.showPopup('🪙 NOT ENOUGH COINS! 🪙', `You don't have ${coinsToSell} Lucky Coins to sell.`, [{ text: 'OK', action: () => {} }]);
+            return;
+        }
+
+        const rate = window.room.roomState.currentExchangeRate;
+        if (!rate || rate <= 0) {
+            this.showPopup('📈 RATE NOT AVAILABLE 📉', 'The exchange rate is not currently available. Please try again later.', [{ text: 'OK', action: () => {} }]);
+            return;
+        }
+
+        const realMoneyGained = coinsToSell * rate;
+
+        this.setCoins(this.coins - coinsToSell);
+        this.setRealMoney(this.realMoney + realMoneyGained);
+        
+        this.showPopup('💰 COINS SOLD! 💰', `You sold ${coinsToSell.toLocaleString()} Lucky Coins for ${realMoneyGained.toFixed(2)} Real Money!`, [{ text: 'GREAT!', action: () => {} }]);
+        this.addToFeed(`💸 ${window.room.peers[window.room.clientId]?.username || 'A player'} sold ${coinsToSell.toLocaleString()} coins for ${realMoneyGained.toFixed(2)} Real Money.`);
+        
+        sellAmountInput.value = ''; 
+        this.updateDisplay(); 
     }
     
     spin(cost, isMega) {
-        if (!this.gameInitialized) return; // Don't allow actions before init
+        if (!this.gameInitialized) return; 
         if (this.realMoney < cost) {
-            this.showPopup('💸 NOT ENOUGH MONEY! 💸', 'You need more money to spin! Buy coins to continue your winning streak!', [
+            this.showPopup('💸 NOT ENOUGH MONEY! 💸', 'You need more money to spin! Buy coins or sell some to continue your winning streak!', [
                 { text: 'BUY COINS NOW!', action: () => this.highlightCoinShop() }
             ]);
             return;
         }
         
-        this.realMoney -= cost;
-        this.updateDisplay();
-        
-        // Animate slots
+        this.setRealMoney(this.realMoney - cost); 
         const slots = [document.getElementById('slot1'), document.getElementById('slot2'), document.getElementById('slot3')];
         slots.forEach(slot => slot.classList.add('spin'));
         
@@ -208,10 +462,9 @@ class MegaLuckCasino {
                 slot.classList.remove('spin');
             });
             
-            this.checkWin(results, isMega);
+            this.checkWin(results, isMega, cost); 
         }, 1000);
         
-        // Broadcast spin to other players
         if (window.room) {
             window.room.send({
                 type: 'player_spin',
@@ -224,19 +477,16 @@ class MegaLuckCasino {
     
     generateResults(isMega) {
         const results = [];
-        const winChance = Math.min(this.luck * (isMega ? 2 : 1), 15); // Max 15% win chance
+        const winChance = Math.min(this.luck * (isMega ? 2 : 1), 15); 
         const shouldWin = Math.random() * 100 < winChance;
         
         if (shouldWin) {
-            // Generate winning combination
             const winSymbol = this.slots[Math.floor(Math.random() * this.slots.length)];
             results.push(winSymbol, winSymbol, winSymbol);
         } else {
-            // Generate losing combination
             for (let i = 0; i < 3; i++) {
                 results.push(this.slots[Math.floor(Math.random() * this.slots.length)]);
             }
-            // Ensure it's not a win
             if (results[0] === results[1] && results[1] === results[2]) {
                 results[2] = this.slots[(this.slots.indexOf(results[2]) + 1) % this.slots.length];
             }
@@ -244,28 +494,25 @@ class MegaLuckCasino {
         
         return results;
     }
-    
-    checkWin(results, isMega) {
+
+    checkWin(results, isMega, costOfSpin) { 
         if (!this.gameInitialized) return;
 
         if (results[0] === results[1] && results[1] === results[2]) {
-            // Win!
             const multiplier = isMega ? 20 : 10;
             const payout = multiplier * this.luck;
-            this.coins += payout;
+            this.setCoins(this.coins + payout); 
             
-            // Win animation
             document.querySelector('.slot-machine').classList.add('win-animation');
             setTimeout(() => {
                 document.querySelector('.slot-machine').classList.remove('win-animation');
             }, 2000);
             
             const message = this.winMessages[Math.floor(Math.random() * this.winMessages.length)];
-            this.showPopup('🎊 WINNER! 🎊', `${message}\n\nYou won ${payout} coins!`, [
+            this.showPopup('🎊 WINNER! 🎊', `${message}\n\nYou won ${payout.toLocaleString()} coins!`, [
                 { text: 'SPIN AGAIN!', action: () => {} }
             ]);
             
-            // Broadcast win
             if (window.room) {
                 window.room.send({
                     type: 'player_win',
@@ -275,7 +522,6 @@ class MegaLuckCasino {
                 });
             }
         } else {
-            // Loss - show encouraging popup sometimes
             if (Math.random() < 0.3) {
                 this.showPopup('😢 So Close! 😢', 'You were almost there! Your luck is building up. Try again!', [
                     { text: 'SPIN AGAIN!', action: () => {} }
@@ -283,7 +529,7 @@ class MegaLuckCasino {
             }
         }
         
-        this.updateDisplay();
+        this.updateDisplay(); 
     }
     
     buyGlove(glove) {
@@ -296,10 +542,14 @@ class MegaLuckCasino {
             return;
         }
         
-        this.coins -= glove.cost;
+        this.setCoins(this.coins - glove.cost); 
         this.luck += glove.luck;
         this.ownedGloves.add(glove.id);
         
+        if (window.room) { 
+            window.room.updatePresence({ luck: this.luck });
+        }
+
         this.showPopup('🧤 GLOVE PURCHASED! 🧤', `You bought ${glove.name}!\nYour luck increased by ${glove.luck}%!`, [
             { text: 'AWESOME!', action: () => {} }
         ]);
@@ -318,10 +568,10 @@ class MegaLuckCasino {
             return;
         }
         
-        this.realMoney -= cost;
-        this.coins += coins;
+        this.setRealMoney(this.realMoney - cost); 
+        this.setCoins(this.coins + coins);       
         
-        this.showPopup('🪙 COINS PURCHASED! 🪙', `You bought ${coins} coins!\nNow go win big!`, [
+        this.showPopup('🪙 COINS PURCHASED! 🪙', `You bought ${coins.toLocaleString()} coins!\nNow go win big!`, [
             { text: 'LET\'S GAMBLE!', action: () => {} }
         ]);
         
@@ -365,13 +615,16 @@ class MegaLuckCasino {
             return;
         }
         
-        this.realMoney -= cost;
+        this.setRealMoney(this.realMoney - cost); 
         this.subscription = {
             type: isTrial ? 'trial' : 'premium',
             startDate: Date.now(),
-            cost: isTrial ? 50 : cost // Trial will charge $50 after a week
+            cost: isTrial ? 50 : cost 
         };
         this.luck *= 2;
+        if (window.room) { 
+            window.room.updatePresence({ luck: this.luck });
+        }
         
         this.showPopup('🎉 SUBSCRIBED! 🎉', `Welcome to Premium! Your luck has doubled!\n${isTrial ? 'Free trial for 7 days!' : 'Monthly subscription active!'}`, [
             { text: 'START WINNING!', action: () => {} }
@@ -379,12 +632,11 @@ class MegaLuckCasino {
         
         this.updateDisplay();
         
-        // Show unsubscribe button after 30 seconds
         setTimeout(() => {
             this.showUnsubscribeOffer();
         }, 30000);
     }
-    
+
     showUnsubscribeOffer() {
         if (!this.gameInitialized || !this.subscription) return;
         
@@ -398,6 +650,11 @@ class MegaLuckCasino {
         if (!this.gameInitialized) return;
         this.cancelAttempts++;
         
+        const originalHandleCoins = (coins) => {
+            this.setCoins(this.coins + coins); 
+            this.updateDisplay();
+        };
+
         const cancellationMessages = [
             {
                 title: '😢 ARE YOU SURE? 😢',
@@ -411,7 +668,7 @@ class MegaLuckCasino {
                 title: '💰 SPECIAL OFFER! 💰',
                 message: 'Wait! Stay subscribed and get 100 FREE coins!\nDon\'t throw away your luck!',
                 buttons: [
-                    { text: 'Take Free Coins!', action: () => { this.coins += 100; this.updateDisplay(); } },
+                    { text: 'Take Free Coins!', action: () => { originalHandleCoins(100); } }, 
                     { text: 'Still Cancel', action: () => this.startCancellationProcess() }
                 ]
             },
@@ -442,18 +699,21 @@ class MegaLuckCasino {
         ];
         
         if (this.cancelAttempts <= cancellationMessages.length) {
-            const message = cancellationMessages[this.cancelAttempts - 1];
-            this.showPopup(message.title, message.message, message.buttons);
+            const messageConfig = cancellationMessages[this.cancelAttempts - 1]; 
+            this.showPopup(messageConfig.title, messageConfig.message, messageConfig.buttons);
         } else {
             this.cancelSubscription();
         }
     }
-    
+
     cancelSubscription() {
         if (!this.gameInitialized) return;
 
         this.subscription = null;
-        this.luck = Math.max(1, this.luck / 2); // Ensure luck doesn't go below 1
+        this.luck = Math.max(1, Math.round(this.luck / 2)); 
+        if (window.room) { 
+            window.room.updatePresence({ luck: this.luck });
+        }
         this.cancelAttempts = 0;
         
         document.getElementById('sub-status').textContent = '❌ NO PREMIUM';
@@ -467,7 +727,7 @@ class MegaLuckCasino {
         
         this.updateDisplay();
     }
-    
+
     highlightCoinShop() {
         if (!this.gameInitialized) return;
 
@@ -483,8 +743,7 @@ class MegaLuckCasino {
     }
     
     showPopup(title, message, buttons) {
-        // If game not initialized (disclaimer is active), queue popup or handle differently
-        if (!this.gameInitialized && title !== '🚨 Important Disclaimer 🚨') { // Prevent infinite loop if disclaimer itself calls showPopup
+        if (!this.gameInitialized && title !== '🚨 Important Disclaimer 🚨') { 
             console.warn("Game not initialized, popup suppressed:", title);
             return;
         }
@@ -494,7 +753,7 @@ class MegaLuckCasino {
             console.error("Popup container not found!");
             return;
         }
-        popupContainer.innerHTML = ''; // Clear previous popups
+        popupContainer.innerHTML = ''; 
 
         const popup = document.createElement('div');
         popup.className = 'popup';
@@ -527,7 +786,6 @@ class MegaLuckCasino {
     
     startFakeWinners() {
         if (!this.gameInitialized) {
-             // Wait for game initialization if called too early
             const checkInit = setInterval(() => {
                 if (this.gameInitialized) {
                     clearInterval(checkInit);
@@ -536,14 +794,14 @@ class MegaLuckCasino {
             }, 100);
             return;
         }
-       this._startFakeWinnersLogic();
+        this._startFakeWinnersLogic();
     }
 
     _startFakeWinnersLogic() {
         const fakeNames = ['LuckyMike', 'BigWinner99', 'CoinMaster', 'JackpotJill', 'GoldenGamer', 'SpinKing'];
         
         setInterval(() => {
-            if (!this.gameInitialized) return; // Double check
+            if (!this.gameInitialized) return; 
             const name = fakeNames[Math.floor(Math.random() * fakeNames.length)];
             const amount = Math.floor(Math.random() * 1000) + 100;
             const symbol = this.slots[Math.floor(Math.random() * this.slots.length)];
@@ -563,7 +821,6 @@ class MegaLuckCasino {
         const timestamp = new Date().toLocaleTimeString();
         feed.innerHTML = `[${timestamp}] ${message}<br>` + feed.innerHTML;
         
-        // Keep only last 20 messages
         const lines = feed.innerHTML.split('<br>');
         if (lines.length > 20) {
             feed.innerHTML = lines.slice(0, 20).join('<br>');
@@ -571,7 +828,6 @@ class MegaLuckCasino {
     }
 }
 
-// Initialize game when page loads
 document.addEventListener('DOMContentLoaded', () => {
     window.game = new MegaLuckCasino();
 });
