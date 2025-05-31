@@ -8,6 +8,12 @@ class MegaLuckCasino {
         this.cancelAttempts = 0;
         this.gameInitialized = false;
         
+        // Time related properties
+        this.gameStartTime = null;
+        this.currentInGameDay = 1;
+        this.isNight = false;
+        this.timeUpdateInterval = null;
+
         this.gloves = [
             { id: 'basic', name: 'Basic Gloves', luck: 2, cost: 10, rarity: 'common' },
             { id: 'lucky', name: 'Lucky Gloves', luck: 5, cost: 50, rarity: 'rare' },
@@ -68,6 +74,12 @@ class MegaLuckCasino {
         this.generateGloves();
         this.bindEvents();
         this.startFakeWinners();
+        
+        // Initialize game time
+        this.gameStartTime = Date.now();
+        this.updateGameTimeDisplay(); // Initial call to set display
+        this.timeUpdateInterval = setInterval(this.updateGameTimeDisplay.bind(this), 1000); // Update every second
+
         this.gameInitialized = true;
         console.log("Game initialized after disclaimer.");
     }
@@ -81,6 +93,44 @@ class MegaLuckCasino {
             document.getElementById('sub-status').textContent = `✅ PREMIUM ACTIVE`;
             document.getElementById('sub-status').className = 'premium-active';
             document.getElementById('subscribe-btn').style.display = 'none';
+        } else {
+            document.getElementById('sub-status').textContent = '❌ NO PREMIUM';
+            document.getElementById('sub-status').className = 'no-sub';
+            document.getElementById('subscribe-btn').style.display = 'block';
+        }
+    }
+    
+    updateGameTimeDisplay() {
+        if (!this.gameStartTime || !this.gameInitialized) {
+            // Set default or ensure DOM elements exist before proceeding if needed
+            const timeStatusIconEl = document.getElementById('time-status-icon');
+            const timeTextEl = document.getElementById('time-text');
+            if (timeStatusIconEl) timeStatusIconEl.textContent = '☀️';
+            if (timeTextEl) timeTextEl.textContent = `Day 1`;
+            return;
+        }
+
+        const elapsedRealTimeMilliseconds = Date.now() - this.gameStartTime;
+        const elapsedRealTimeSeconds = elapsedRealTimeMilliseconds / 1000;
+
+        // 1 in-game day = 2 real-time seconds
+        this.currentInGameDay = Math.floor(elapsedRealTimeSeconds / 2) + 1;
+        
+        // Day/Night cycle: 0-0.99s = day, 1-1.99s = night within each 2-second block
+        const cyclePositionInSeconds = elapsedRealTimeSeconds % 2;
+        this.isNight = cyclePositionInSeconds >= 1;
+
+        const timeStatusIconEl = document.getElementById('time-status-icon');
+        const timeTextEl = document.getElementById('time-text');
+
+        if (timeStatusIconEl && timeTextEl) {
+            if (this.isNight) {
+                timeStatusIconEl.textContent = '🌙';
+                timeTextEl.textContent = `Night ${this.currentInGameDay}`;
+            } else {
+                timeStatusIconEl.textContent = '☀️';
+                timeTextEl.textContent = `Day ${this.currentInGameDay}`;
+            }
         }
     }
     
